@@ -1,0 +1,100 @@
+/* Windows high contrast mode breaks the colors of the website in Chrome. Go to chrome://flags and set "Forced Colors" to "Disabled". */
+
+:root {
+	--r: 12px;
+	--shadow: #54a;
+}
+.title {
+	font-size: 36pt;
+	text-shadow:
+		calc(var(--r) *   cos(0deg)) calc(var(--r) *   sin(0deg)) 0 var(--shadow),
+		calc(var(--r) *  cos(72deg)) calc(var(--r) *  sin(72deg)) 0 var(--shadow),
+		calc(var(--r) * cos(144deg)) calc(var(--r) * sin(144deg)) 0 var(--shadow),
+		calc(var(--r) * cos(216deg)) calc(var(--r) * sin(216deg)) 0 var(--shadow),
+		calc(var(--r) * cos(288deg)) calc(var(--r) * sin(288deg)) 0 var(--shadow);
+}
+.center {
+	margin-left: auto;
+	margin-right: auto;
+}
+.centerWrapper {
+	width: 100vw;
+	height: 100vh;
+	display: table-cell;
+	vertical-align: middle;
+}
+::selection {
+	background-color: #76f;
+}
+body, a, input {
+	font: 12pt Arial, sans-serif;
+	color: #fff;
+	background-color: #000;
+}
+a, input, canvas {
+	border: 1px solid #76f;
+	border-radius: 2px;
+	padding: 3px 6px;
+}
+a {
+	text-decoration: none;
+	cursor: pointer;
+}
+a:hover {
+	border: 1px solid #fff;
+	border: 1px solid #fff;
+	border: 1px solid #fff;
+	border: 1px solid #fff;
+}
+a.hidden {
+	color: #000;
+	border: 1px solid #000;
+}
+a.hidden:hover {
+	color: #999;
+	border: 1px solid #999;
+}
+a.max {
+	display: block;
+	width: 100%;
+}
+a.ext {
+	text-align: right;
+}
+input.max {
+	width: 100%;
+	box-sizing: border-box;
+}
+p {
+	margin-top: 8px;
+	margin-bottom: 8px;
+	text-indent: 32px;
+}
+span.gen {
+	color: #999;
+}
+table, th, td {
+	width: auto;
+	padding: 6px 12px;
+}
+table.min, th.min, td.min {
+	width: 1%;
+	white-space: nowrap;
+}
+table {
+	border-collapse: collapse;
+}
+th {
+	font-weight: normal;
+}
+td.clickable {
+	font-size: 18pt;
+	border: 1px solid #76f;
+	padding: 6px 12px;
+	text-align: center;
+	user-select: none;
+	cursor: pointer;
+}
+td.clickable:hover {
+	box-shadow: 0 0 0 2px #fff inset;
+}

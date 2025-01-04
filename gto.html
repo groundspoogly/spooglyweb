@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Ground Temperament Optimizer</title>
+<link rel="stylesheet" href="main.css">
+<style>
+body {
+	padding: 1% 5%;
+}
+table, th, td {
+	border-left: 1px solid #76f;
+}
+th {
+	text-align: left;
+	border-bottom: 1px solid #76f;
+}
+</style>
+<script>
+// this fixes the JavaScript modulo bug with negative numbers
+Number.prototype.mod = function(n) {
+	return ((this % n) + n) % n;
+};
+
+function genTable(period, generator, minGens, maxGens) {
+	let genDecimals = generator.split('.');
+	let perDecimals = period.split('.');
+	let precision = Math.max(genDecimals.length > 1 ? genDecimals[1].length : 0, perDecimals.length > 1 ? perDecimals[1].length : 0) // maximum number of digits after the decimal point, needed to hide floating point errors
+	period = Number(period); // convert input strings to numbers
+	generator = Number(generator);
+	minGens = Number(minGens);
+	maxGens = Number(maxGens);
+	let html = '<table class="min">\n<tr><th>Prds</th><th>Gens</th><th /></tr>\n'
+	for (let i = minGens; i <= maxGens; i++) {
+		html += '<tr><td>' + (-Math.floor(generator*i/period)) + '</td><td>' + i + '</td><td>' + (generator*i).mod(period).toFixed(precision) + '</td></tr>\n';
+	}
+	document.getElementById('output').innerHTML = html + '</table>';
+}
+
+function drTable(minInit, maxInit, step, elements) {
+	let minInitDecimals = minInit.split('.');
+	let maxInitDecimals = maxInit.split('.');
+	let stepDecimals = step.split('.');
+	let precision = Math.max(minInitDecimals.length > 1 ? minInitDecimals[1].length : 0, maxInitDecimals.length > 1 ? maxInitDecimals[1].length : 0, stepDecimals.length > 1 ? stepDecimals[1].length : 0) // maximum number of digits after the decimal point, needed to hide floating point errors
+	minInit = Number(minInit);
+	maxInit = Number(maxInit);
+	step = Number(step);
+	elements = Number(elements);
+	let html = '<table class="min">\n<tr>' + '<th>+1</th>'.repeat(elements) + '</tr>\n'
+	for (let c = minInit; c <= maxInit; c += step) {
+		html += '<tr><td>' + c.toFixed(precision) + '</td>';
+		for (let i = 2; i <= elements; i++) {
+			html += '<td>' + (Math.log2((Math.pow(2, c/1200) - 1)*i + 1)*1200).toFixed(precision) + '</td>';
+		}
+		html += '</tr>\n';
+	}
+	document.getElementById('output').innerHTML = html + '</table>';
+}
+
+const optDiv = 15; // number of divisions of the range being tested in temperament optimization; (optDiv+1)^2 values will be tested per level
+const precisionLevels = 40;
+const subsetRange = 2; // number of previous divisions to test in either direction
+// number of calculations: precisionLevels(optDiv+1)^2
+// ultimate precision in fraction of a period: (2subsetRange/optDiv)^(precisionLevels-1)/optDiv
+// precision scales exponentially with precision levels, so maximize that
+const outputPlaces = 6;
+const maxOptimalEt = 311;
+
+function GTO(temperStr) {
+	let args = temperStr.split(';').join('|').split('|').map(item=>item.trim()); // ignore spaces surrounding bar or semicolon; regex treats multiple delimiters in a row as one, so use split and join instead
+	if (args.length != 4) {
+		document.getElementById('output').innerHTML = 'Error: wrong number of separators.';
+		return;
+	}
+	
+	let parameters = (args[0].length > 0 ? args[0].split(/[\s,.\[\]]+/).map(Number) : []); // split the string by spaces, commas, periods, and brackets, unless the string is empty to avoid an array with an empty string; convert to array of numbers
+	let subgroup = (args[1].length > 0 ? args[1].split(/[\s,.\[\]]+/) : []);
+	let DRgroupStr = (args[2].length > 0 ? args[2].split(/[\s,.\[\]]+/) : []);
+	let genMap = (args[3].length > 0 ? args[3].split(/[\s,.\[\]]+/).map(Number) : []);
+	
+	let drGroup = [];
+	let currentDR = []; // format [+X, xPeriod, xGenerator, +Y]
+	for (let i = 0; i < DRgroupStr.length; i++) {
+		if (DRgroupStr[i].charAt(0) == '+') {
+			currentDR.push(Number(DRgroupStr[i].substring(1))); // push the number without the +
+			if (currentDR.length > 1) { // final + terminates the expression
+				if (currentDR.length != 4) {
+					document.getElementById('output').innerHTML = 'Error: wrong number of arguments in delta-rational expression.';
+					return;
+				}
+				drGroup.push(currentDR);
+				currentDR = [];
+			}
+		} else currentDR.push(Number(DRgroupStr[i])); // put monzo numbers in the middle
+	}
+	
+	if (subgroup.length + drGroup.length != genMap.length) {
+		console.log(subgroup);
+		document.getElementById('output').innerHTML = 'Error: subgroup and generator mapping arrays aren\'t the same length.';
+		return;
+	}
+	
+	// define temperament algorithm variables
+	let period = parameters[0]/1200; // do the math in octaves to make it simpler
+	let bestGen = 0;
+	let genRange = [parameters.length > 1 ? parameters[1]/1200 : 0, parameters.length > 2 ? parameters[2]/1200 : period];
+	let bestErac = 0;
+	let eracRange = [parameters.length > 3 ? parameters[3]/1200 : 0, parameters.length > 4 ? parameters[4]/1200 : period];
+	let bestError = -1;
+	
+	let eracMap = [];
+	subgroup.forEach(e => { // subtract instances of < from instances of >
+		eracMap.push((e.match(/>/g) || []).length - (e.match(/</g) || []).length);
+	});
+	let subgroupNumbers = subgroup.map(function(x){return x.replace(/\D/g, '');}).map(Number); // remove all non-numbers and convert the data type
+	
+	let subgroupOct = [];
+	subgroupNumbers.forEach(e => { // convert each prime to octaves to save on computation time
+		subgroupOct.push(Math.log2(e));
+	});
+
+	function drMath(gen, i) {
+		let startInterval = period*drGroup[i][1] + gen*drGroup[i][2];
+		// if startInterval is negative, invert it and return a negative result to make the math work
+		// convert startInterval to ratio, subtract 1, multiply by relevant amount, add 1, convert back to octaves, then subtract all of this from the generated target interval
+		return Math.sign(startInterval)*Math.log2((Math.pow(2, Math.abs(startInterval)) - 1)*(drGroup[i][0] + drGroup[i][3])/drGroup[i][0] + 1);
+	}
+	
+	for (let pLevel = 0; pLevel < precisionLevels; pLevel++) { // for each precision level
+		let genStep = (genRange[1] - genRange[0])/optDiv;
+		let eracStep = (eracRange[1] - eracRange[0])/optDiv;
+		for (let gIndex = 0; gIndex <= optDiv; gIndex++) { // for each step in the generator range
+			for (let eIndex = 0; eIndex <= optDiv; eIndex++) { // for each step in the erac range
+				let currentGen = genRange[0] + gIndex*genStep;
+				let currentErac = eracRange[0] + eIndex*eracStep;
+				let totalError = Math.pow(currentErac, 2); // start with the difference of the erac from unison
+				for (let i = 0; i < subgroupNumbers.length; i++) { // for each prime in the subgroup
+					// subtract just interval and applicable error offset from generated interval, find period that makes them most accurate, then square and add to total
+					let unreducedError = currentGen*genMap[i] - subgroupOct[i] - eracMap[i]*currentErac; // nothing is period-reduced
+					let tempPeriodMap = -Math.round(unreducedError/period);
+					totalError += Math.pow(unreducedError + period*tempPeriodMap, 2);
+				}
+				for (let i = 0; i < drGroup.length; i++) {
+					// handle the drGroup intervals in the temperament calculation
+					let unreducedError = currentGen*genMap[i + subgroupNumbers.length] - drMath(currentGen, i);
+					let tempPeriodMap = -Math.round(unreducedError/period);
+					totalError += Math.pow(unreducedError + period*tempPeriodMap, 2);
+				}
+				if (bestError < 0 || totalError < bestError) {
+					bestError = totalError;
+					bestGen = currentGen;
+					bestErac = currentErac;
+				}
+			}
+		}
+		// redefine the ranges for the next precision level
+		genRange = [bestGen - genStep*subsetRange, bestGen + genStep*subsetRange];
+		eracRange = [bestErac - eracStep*subsetRange, bestErac + eracStep*subsetRange];
+	}
+	
+	// find the ideal erac when size is not considered; DR intervals are irrelevant because they don't use eracs
+	eracRange = [0, period];
+	// bestError will be lowered by this step every time, so it doesn't need to be reset
+	for (let pLevel = 0; pLevel < precisionLevels; pLevel++) { // for each precision level
+		let eracStep = (eracRange[1] - eracRange[0])/optDiv;
+		for (let eIndex = 0; eIndex <= optDiv; eIndex++) { // for each step in the erac range
+			let currentErac = eracRange[0] + eIndex*eracStep;
+			let totalError = 0;
+			for (let i = 0; i < subgroupNumbers.length; i++) { // for each prime in the subgroup
+				// subtract just interval and applicable error offset from generated interval, find period that makes them most accurate, then square and add to total
+				let unreducedError = bestGen*genMap[i] - subgroupOct[i] - eracMap[i]*currentErac; // nothing is period-reduced
+				let tempPeriodMap = -Math.round(unreducedError/period);
+				totalError += Math.pow(unreducedError + period*tempPeriodMap, 2);
+			}
+			if (totalError < bestError) {
+				bestError = totalError;
+				bestErac = currentErac;
+			}
+		}
+		// redefine the range for the next precision level
+		eracRange = [bestErac - eracStep*subsetRange, bestErac + eracStep*subsetRange];
+	}	
+	
+	// calculate the final period map
+	let bestPeriodMap = [];
+	for (let i = 0; i < subgroupNumbers.length; i++) { // for each prime in the subgroup
+		// subtract just interval and applicable error offset from generated interval, find period that makes them most accurate, then square and add to total
+		let unreducedError = bestGen*genMap[i] - subgroupOct[i] - eracMap[i]*bestErac; // nothing is period-reduced
+		bestPeriodMap.push(-Math.round(unreducedError/period));
+	}
+	let drSubgroupStrArr = []; // create the DR subgroup output string while we're at it
+	for (let i = 0; i < drGroup.length; i++) {
+		let unreducedError = bestGen*genMap[i + subgroupNumbers.length] - drMath(bestGen, i);
+		bestPeriodMap.push(-Math.round(unreducedError/period));
+		drSubgroupStrArr.push('+' + drGroup[i][0] + '[' + drGroup[i][1] + ' ' + drGroup[i][2] + ']+' + drGroup[i][3]);
+	}
+	
+	// use the regression generator and the period map to calculate the temperament error in various ET's to find the best one, not counting erac as an error
+	let optimalEtSeq = '';
+	let bestEtError = -1;
+	for (let et = 1; et <= maxOptimalEt; et++) {
+		let etGen = Math.round(bestGen*et/period);
+		let totalEtError = 0;
+		for (let i = 0; i < subgroupNumbers.length; i++) {
+			totalEtError += Math.pow(etGen*period/et*genMap[i] - subgroupOct[i] - eracMap[i]*bestErac + period*bestPeriodMap[i], 2);
+		}
+		for (let i = 0; i < drGroup.length; i++) {
+			totalEtError += Math.pow(etGen*period/et*genMap[i + subgroupNumbers.length] - drMath(etGen*period/et, i) + period*bestPeriodMap[i + subgroupNumbers.length], 2);
+		}
+		if (bestEtError < 0 || totalEtError < bestEtError) {
+			optimalEtSeq += ' <span class="gen">' + etGen + '\\</span>' + et;
+			if (totalEtError == 0) break; // perfect approximation has been found
+			bestEtError = totalEtError;
+		}
+	}
+	
+	let html =
+		'<table class="min">\n<tr><td colspan="2">Subgroup:</td><td>' + subgroupNumbers.join('.') + (drGroup.length > 0 ? '.' : '') + drSubgroupStrArr.join('.') +
+		'</td></tr>\n<tr><td colspan="2">Regression Period Map:</td><td>' + bestPeriodMap.join(' ') +
+		'</td></tr>\n<tr><td colspan="2">Generator Map:</td><td>' + genMap.join(' ') +
+		'</td></tr>\n<tr><td colspan="2">Erac Map:</td><td>' + eracMap.join(' ') + ' 0'.repeat(drGroup.length) +
+		'</td></tr>\n<tr><td colspan="2">Period:</td><td>' + (period*1200) +
+		' ¢</td></tr>\n<tr><td colspan="2">Regression Generator:</td><td>' + (bestGen*1200).toFixed(outputPlaces) +
+		' ¢</td></tr>\n<tr><td colspan="2">Regression Erac:</td><td>' + (bestErac*1200).toFixed(outputPlaces) +
+		' ¢</td></tr>\n<tr><td colspan="2">Least-Squares Error:</td><td>' + (Math.sqrt(bestError)*1200).toFixed(outputPlaces) +
+		' ¢</td></tr>\n<tr><td colspan="2">Optimal ED[period] ≤ ' + maxOptimalEt + ':</td><td>' + optimalEtSeq.substring(1) +
+		'</td></tr>\n<tr><td>Prime</td><td>Tempered ¢</td><td>Error ¢</td></tr>\n';
+	for (let i = 0; i < subgroup.length; i++) {
+		let currentError = bestGen*genMap[i] + period*bestPeriodMap[i] - subgroupOct[i] - eracMap[i]*bestErac;
+		html += '<tr><td class="min">' + subgroup[i] +
+			'</td><td class="min">' + ((bestGen*genMap[i] + period*bestPeriodMap[i])*1200).toFixed(outputPlaces) +
+			'</td><td>' + (currentError > 0 ? '+' : '') + (currentError*1200).toFixed(outputPlaces) + '</td></tr>\n';
+	}
+	for (let i = 0; i < drGroup.length; i++) {
+		let currentError = bestGen*genMap[i + subgroupNumbers.length] - drMath(bestGen, i) + period*bestPeriodMap[i + subgroupNumbers.length];
+		html += '<tr><td class="min">' + drSubgroupStrArr[i] +
+			'</td><td class="min">' + ((period*drGroup[i][1] + bestGen*drGroup[i][2])*1200).toFixed(outputPlaces) +
+			'<br>' + ((bestGen*genMap[i + subgroupNumbers.length] + period*bestPeriodMap[i + subgroupNumbers.length])*1200).toFixed(outputPlaces) +
+			'</td><td>' + (currentError > 0 ? '+' : '') + (currentError*1200).toFixed(outputPlaces) + '</td></tr>\n';
+	}
+	document.getElementById('output').innerHTML = html + '</table>';
+}
+</script>
+</head>
+<body>
+	<table>
+		<tr><td colspan="4"><a onclick="location.href='index.html'">&lt;</a> Ground's Split-Prime/DR Rank-2 Temperament Optimization Algorithm<br><br></td></tr>
+		<tr><td colspan="2">Generator Table</td><td colspan="2">DR Table</td></tr>
+		<tr>
+			<td class="min">Period:</td><td class="min"><input type="number" value="1200" id="period"></td>
+			<td class="min">Min +1 ¢:</td><td><input type="number" value="200" id="minInit"></td>
+		</tr>
+		<tr>
+			<td class="min">Generator:</td><td class="min"><input type="number" value="730" id="generator"></td>
+			<td class="min">Max +1 ¢:</td><td><input type="number" value="500" id="maxInit"></td>
+		</tr>
+		<tr>
+			<td class="min">Min Generators:</td><td class="min"><input type="number" value="-18" id="minGens"></td>
+			<td class="min">Step ¢:</td><td><input type="number" value="1" id="step"></td>
+		</tr>
+		<tr>
+			<td class="min">Max Generators:</td><td class="min"><input type="number" value="18" id="maxGens"></td>
+			<td class="min">Elements:</td><td><input type="number" value="5" id="elements"></td>
+		</tr>
+		<tr>
+			<td /><td class="min"><a onclick="genTable(getElementById('period').value, getElementById('generator').value, getElementById('minGens').value, getElementById('maxGens').value)">Submit</a></td>
+			<td /><td><a onclick="drTable(getElementById('minInit').value, getElementById('maxInit').value, getElementById('step').value, getElementById('elements').value)">Submit</a></td>
+		</tr>
+		<tr><td colspan="4"><br>Temperament Optimization</td></tr>
+		<tr><td colspan="4">Eracs (error accidentals) &lt; and &gt; indicate how much a prime is flat or sharp proportional to others. 1:1 split-prime systems will only use one in either direction, while 1:2 and 2:1 systems will use two, tending in the direction of the less accurate prime.</td></tr>
+		<tr><td colspan="4">To use the temperament string, separate the four arguments by bars or semicolons: period, subgroup, additional delta-rational "primes", and generator mapping of both. DR primes are notated in the format +X [periods and generators of the interval mapped to +X] +Y. Additional parameters may be added after the period, separated by spaces, in the order: period min_gen max_gen min_erac max_erac | to constrain the search if it returns an unexpected result.</td></tr>
+		<tr><td class="min">Temperament string:</td><td colspan="3"><input type="text" value="1200 | 2 3< 3>> 5> 7> 11 13 | +1[7 -11]+1 | 0 -4 1 -11 3 9 16 1" class="max" id="temperStr"></td></tr>
+		<tr><td /><td><a onclick="GTO(getElementById('temperStr').value)">Submit</a></td></tr>
+	</table>
+	<br>
+	<div id="output">
+		Some operations will be easier in a different tool: <a href="https://sintel.pythonanywhere.com" target="_blank">Sintel Temperament Calculator &gt;</a></br></br>
+		Explanation of the GTO algorithm:
+		<p>
+			Split-prime temperaments show promise to replace exotemperaments because they systematize error that would otherwise be pathological, allowing for optimization of error cancelation, thus making them more useful. The eracs may also prove useful for optimizing temperaments that are not split-prime, but still require heavier tempering to work.
+		</p><p>
+			Only integer primes are supported. Slashes should not be necessary because the eracs allow errors to cancel out.
+		</p><p>
+			GTO is fundamentally a least-squares algorithm; if there's no reason to use something more complicated, then don't. Values for the generator and erac are initially tested from unison to the size of the period, or a different range if specified. The resolution is then increased and this process is repeated on a range larger than one previous division wide for redundancy, due to the fact that the value of an erac is an additional variable.
+		</p><p>
+			For primes with eracs, the value of the erac is added or subtracted the appropriate number of times when the least-squares error is calculated. The ideal value of the erac is considered to be unison, so it's treated like a prime error in the least-squares calculation. After the optimal generator is found, the calculation is then run again without the erac present to determine its ideal value.
+		</p><p>
+			DR intervals do not involve erac values; some start interval defined by its mapping of periods and generators is plugged into the DR equation and the result contributes to the least-squares error the same way as any other prime. Currently the algorithm doesn't work with only DR expressions because it requires target primes to calculate a rough generator.
+		</p><p>
+			The optimal ET sequence is calculated the same way the optimal generator is, by going through various ET approximations of the generator and calculating the least-squares error based on the mappings. This is done instead of just finding good approximations of the generator to ensure that intervals are still optimal when stacked.
+		</p>
+		<table class="min">
+			<tr><td colspan="2">Example Temperaments</td></tr>
+			<tr><td>Septimal Meantone</td><td>1200 | 2 3 5 7 || 0 1 4 10</td></tr>
+			<tr><td>1:1 sharp-3 +1+1+1 flat-3 +2+1 "DR 18"</td><td>1200 | 2 3&lt; 3&gt; | +1[4 -6]+1 +1[4 -6]+2 +2[1 -1]+1| 0 -4 1 1 3 -4</td></tr>
+			<tr><td>1:2 split-3 "Suproneiro"</td><td>1200 | 2 3&lt; 3&gt;&gt; 5&gt; 7&gt; 11 13 | +1[7 -11]+1 | 0 -4 1 -11 3 9 16 1</td></tr>
+			<tr><td>+1+2 hard antidiatonic "Simbis-Dravila"</td><td>1200 | 2 3 5&lt; 7&lt; 11&lt; 13&lt; | +1[-2 4]+2 | 0 -8 6 -4 -1 -6 1</td></tr>
+			<tr><td>47&amp;57 compressed 4:5:6 stretched 6:7:9</td><td>1200 | 3&lt; 3&gt; 5 7 11> 13 17 37 | +1[3 -9]+1 +1[5 -16]+2 | 12 2 -9 -4 15 -1 7 -6 12 2</td></tr>
+			<tr><td>47&amp;57 DR-only</td><td>1200 300 400 | | +1[3 -9]+1 +1[5 -16]+2 | 12 2</td></tr>
+		</table>
+		(Tentative name "Simbis" meaning +1+2, "Dravila" meaning a DR-based Mavila temperament)<br><br>
+		Note: Requires a browser with ES6+ (2015)<br>
+	</div>
+</body>
+</html>

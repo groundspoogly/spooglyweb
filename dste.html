@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Dead Shaman's Triad Explorer</title>
+<link rel="stylesheet" href="main.css">
+</head>
+<body>
+
+<table>
+	<tr>
+		<td style="text-align: right"><a onclick="location.href='index.html'">&lt;</a> Dead Shaman's<br>Triad Explorer</td>
+		<td></td>
+		<td class="clickable"onclick="Up(100)">△</td>
+		<td></td>
+		<td class="clickable"onclick="Zoom(1.333333333333)">+</td>
+		<td class="clickable"onclick="Zoom(8)">++</td>
+		<td></td>
+	</tr>
+	<tr>
+		<td></td>
+		<td class="clickable"onclick="Left(100)">◁</td>
+		<td class="clickable"onclick="Up(-100)">▽</td>
+		<td class="clickable"onclick="Left(-100)">▷</td>
+		<td class="clickable"onclick="Zoom(0.75)">-</td>
+		<td class="clickable"onclick="Zoom(0.125)">- -</td>
+		<td class="clickable"onclick="Reset()">Reset</td>
+	</tr>
+</table>
+<br>
+<canvas id="myCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("myCanvas");
+const ctx = canvas.getContext("2d");
+const w = window.innerWidth - 40;
+const h = window.innerHeight - 160;
+const minwh = Math.min(w,h);
+canvas.width = w;
+canvas.height = h;
+
+function GCD(a,b){
+	while ((a*b)!=0){
+		if (a>b) a%=b;
+		else b%=a;
+	}
+	return a+b;
+}
+
+function HE(a){
+	return ( a[0]*a[1]
+	       + a[0]*a[2]
+		   + a[1]*a[2]
+		   - a[0]*GCD(a[1],a[2])
+		   - a[1]*GCD(a[2],a[0])
+		   - a[2]*GCD(a[0],a[1])
+		   + 1 )
+		   / (a[0] * a[1] * a[2]);
+}
+
+function Reset(){
+	u = (h-minwh)/2;
+	d = h - (h-minwh)/2;
+	l = (w-minwh)/2;
+	r = w - (w-minwh)/2;
+	Zoom(0.75);
+	Draw();
+}
+
+function Up(a){
+	u+=a;
+	d+=a;
+	Draw();
+}
+
+function Left(a){
+	r+=a;
+	l+=a;
+	Draw();
+}
+
+function Zoom(a){
+	u = (u - (h/2))*a + h/2;
+	d = (d - (h/2))*a + h/2;
+	l = (l - (w/2))*a + w/2;
+	r = (r - (w/2))*a + w/2;
+	Draw();
+}
+
+function Draw(){
+	ctx.clearRect(0, 0, w, h);
+	//ctx.fillStyle = "#000000";
+	//ctx.fillRect((l*3+r*2)/5, (u*3+d*2)/5,(r-l)/5,(d-u)/5);
+	//ctx.fillStyle = "#ffffff";
+	//ctx.fillRect((l*4+r*3)/7, (u*4+d*3)/7,(r-l)/7,(d-u)/7);
+	DrawDiagram();
+	DrawEdoDiagram()
+}
+
+function HEToColor(a){
+	return "#" + (Math.min(Math.round((Math.sqrt(a)+a)*255),255)).toString(16) + "6020"
+
+}
+
+function ChordX(a){
+	let x = Math.log(a[2]/a[0])/Math.log(2);
+	x = x * (r - l) + l;
+	return x;
+}
+
+function ChordY(a){
+	let y = 1 - Math.log(a[1]/a[0])/Math.log(2);
+	y = y * (d - u) + u;
+	return y;
+}
+
+function EdoChordX(a){
+	let x = a[1]/a[2];
+	x = x * (r - l) + l;
+	return x;
+}
+
+function EdoChordY(a){
+	let y = 1 - a[0]/a[2];
+	y = y * (d - u) + u;
+	return y;
+}
+
+function DistanceChecker(a1x, a1y, a2x, a2y, a3x, a3y, a4x, a4y, a5x, a5y, a6x, a6y, a7x, a7y){
+	let tooClose = 50;
+	
+	let  a1a2Distance = Math.abs(a1x - a2x) + Math.abs(a1y - a2y);
+	let  a1a3Distance = Math.abs(a1x - a3x) + Math.abs(a1y - a3y);
+	let  a1a4Distance = Math.abs(a1x - a4x) + Math.abs(a1y - a4y);
+	let  a1a5Distance = Math.abs(a1x - a5x) + Math.abs(a1y - a5y);
+	let  a1a6Distance = Math.abs(a1x - a6x) + Math.abs(a1y - a6y);
+	let  a1a7Distance = Math.abs(a1x - a7x) + Math.abs(a1y - a7y);
+	let  a2a3Distance = Math.abs(a2x - a3x) + Math.abs(a2y - a3y);
+	let  a2a4Distance = Math.abs(a2x - a4x) + Math.abs(a2y - a4y);
+	let  a2a5Distance = Math.abs(a2x - a5x) + Math.abs(a2y - a5y);
+	let  a2a6Distance = Math.abs(a2x - a6x) + Math.abs(a2y - a6y);
+	let  a2a7Distance = Math.abs(a2x - a7x) + Math.abs(a2y - a7y);
+	let  a3a4Distance = Math.abs(a3x - a4x) + Math.abs(a3y - a4y);
+	let  a3a5Distance = Math.abs(a3x - a5x) + Math.abs(a3y - a5y);
+	let  a3a6Distance = Math.abs(a3x - a6x) + Math.abs(a3y - a6y);
+	let  a3a7Distance = Math.abs(a3x - a7x) + Math.abs(a3y - a7y);
+	let  a4a5Distance = Math.abs(a4x - a5x) + Math.abs(a4y - a5y);
+	let  a4a6Distance = Math.abs(a4x - a6x) + Math.abs(a4y - a6y);
+	let  a4a7Distance = Math.abs(a4x - a7x) + Math.abs(a4y - a7y);
+	let  a5a6Distance = Math.abs(a5x - a6x) + Math.abs(a5y - a6y);
+	let  a5a7Distance = Math.abs(a5x - a7x) + Math.abs(a5y - a7y);
+	let  a6a7Distance = Math.abs(a6x - a7x) + Math.abs(a6y - a7y);
+	
+	let bigEnough = (a1a2Distance > tooClose) && 
+	                (a1a3Distance > tooClose) && 
+					(a1a4Distance > tooClose) && 
+					(a1a5Distance > tooClose) && 
+					(a1a6Distance > tooClose) && 
+					(a1a7Distance > tooClose) && 
+					(a2a3Distance > tooClose) && 
+					(a2a4Distance > tooClose) && 
+					(a2a5Distance > tooClose) && 
+					(a2a6Distance > tooClose) && 
+					(a2a7Distance > tooClose) && 
+					(a3a4Distance > tooClose) && 
+					(a3a5Distance > tooClose) && 
+					(a3a6Distance > tooClose) && 
+					(a3a7Distance > tooClose) && 
+					(a4a5Distance > tooClose) && 
+					(a4a6Distance > tooClose) && 
+					(a4a7Distance > tooClose) && 
+					(a5a6Distance > tooClose) && 
+					(a5a7Distance > tooClose) && 
+					(a6a7Distance > tooClose); 
+	
+	return bigEnough;
+
+
+}
+
+function DrawDiagramHelper(a, b, c){
+	let ab  = [a[0]+b[0],      a[1]+b[1],      a[2]+b[2]     ];
+	let ac  = [a[0]+c[0],      a[1]+c[1],      a[2]+c[2]     ];
+	let bc  = [b[0]+c[0],      b[1]+c[1],      b[2]+c[2]     ];
+	let abc = [a[0]+b[0]+c[0], a[1]+b[1]+c[1], a[2]+b[2]+c[2]];
+
+	let ax   = ChordX(  a);
+	let ay   = ChordY(  a);
+	let bx   = ChordX(  b);
+	let by   = ChordY(  b);
+	let cx   = ChordX(  c);
+	let cy   = ChordY(  c);
+	let abx  = ChordX( ab);
+	let aby  = ChordY( ab);
+	let acx  = ChordX( ac);
+	let acy  = ChordY( ac);
+	let bcx  = ChordX( bc);
+	let bcy  = ChordY( bc);
+	let abcx = ChordX(abc); 
+	let abcy = ChordY(abc); 
+	
+	let tooMuchUp    = (ay < 0) && (by < 0) && (cy < 0);
+	let tooMuchDown  = (ay > h) && (by > h) && (cy > h);
+	let tooMuchLeft  = (ax < 0) && (bx < 0) && (cx < 0);
+	let tooMuchRight = (ax > w) && (bx > w) && (cx > w);
+	let onScreen = (!tooMuchUp)   && 
+	               (!tooMuchDown) && 
+				   (!tooMuchLeft) && 
+				   (!tooMuchRight);
+
+	let bigEnough = DistanceChecker(ax,ay,bx,by,cx,cy,abx,aby,acx,acy,bcx,bcy,abcx,abcy);
+	
+	if (bigEnough&onScreen){
+	
+		//                  [c]
+		//                #  #
+		//              #    #
+		//            #      #
+		//         [ac]    [bc]
+		//       #           #
+		//     #     [abc]   #
+		//   #               #
+		// [a]#####[ab]#####[b]
+		
+		
+		
+		DrawChord( ab);
+		DrawChord( ac);
+		DrawChord( bc);
+		DrawChord(abc);
+		
+		DrawDiagramHelper(a, ab, abc);
+		DrawDiagramHelper(a, ac, abc);
+		DrawDiagramHelper(b, ab, abc);
+		DrawDiagramHelper(b, bc, abc);
+		DrawDiagramHelper(c, ac, abc);
+		DrawDiagramHelper(c, bc, abc);
+	}
+}
+
+function DrawEdoDiagramHelper(a, b, c){
+	let ab  = [a[0]+b[0],      a[1]+b[1],      a[2]+b[2]     ];
+	let ac  = [a[0]+c[0],      a[1]+c[1],      a[2]+c[2]     ];
+	let bc  = [b[0]+c[0],      b[1]+c[1],      b[2]+c[2]     ];
+	let abc = [a[0]+b[0]+c[0], a[1]+b[1]+c[1], a[2]+b[2]+c[2]];
+
+	let tooClose = 50;
+	let ax   = EdoChordX(  a);
+	let ay   = EdoChordY(  a);
+	let bx   = EdoChordX(  b);
+	let by   = EdoChordY(  b);
+	let cx   = EdoChordX(  c);
+	let cy   = EdoChordY(  c);
+	let abx  = EdoChordX( ab);
+	let aby  = EdoChordY( ab);
+	let acx  = EdoChordX( ac);
+	let acy  = EdoChordY( ac);
+	let bcx  = EdoChordX( bc);
+	let bcy  = EdoChordY( bc);
+	let abcx = EdoChordX(abc); 
+	let abcy = EdoChordY(abc); 
+	
+	let tooMuchUp    = (ay < 0) && (by < 0) && (cy < 0);
+	let tooMuchDown  = (ay > h) && (by > h) && (cy > h);
+	let tooMuchLeft  = (ax < 0) && (bx < 0) && (cx < 0);
+	let tooMuchRight = (ax > w) && (bx > w) && (cx > w);
+	let onScreen = (!tooMuchUp)   && 
+	               (!tooMuchDown) && 
+				   (!tooMuchLeft) && 
+				   (!tooMuchRight);
+	
+	let bigEnough = DistanceChecker(ax,ay,bx,by,cx,cy,abx,aby,acx,acy,bcx,bcy,abcx,abcy);
+	
+	if (bigEnough&onScreen){
+	
+		//                  [c]
+		//                #  #
+		//              #    #
+		//            #      #
+		//         [ac]    [bc]
+		//       #           #
+		//     #     [abc]   #
+		//   #               #
+		// [a]#####[ab]#####[b]
+		
+		
+		DrawEdoChord( ab);
+		DrawEdoChord( ac);
+		DrawEdoChord( bc);
+		DrawEdoChord(abc);
+		
+		DrawEdoDiagramHelper(a, ab, abc);
+		DrawEdoDiagramHelper(a, ac, abc);
+		DrawEdoDiagramHelper(b, ab, abc);
+		DrawEdoDiagramHelper(b, bc, abc);
+		DrawEdoDiagramHelper(c, ac, abc);
+		DrawEdoDiagramHelper(c, bc, abc);
+	}
+}
+
+function DrawDiagram(){
+	DrawChord([1,1,1]);
+	DrawChord([1,1,2]);
+	DrawChord([1,2,2]);
+	DrawDiagramHelper([1,1,1],[1,1,2],[1,2,2]);
+}
+
+function DrawEdoDiagram(){
+	DrawEdoChord([0,0,1]);
+	DrawEdoChord([0,1,1]);
+	DrawEdoChord([1,1,1]);
+	DrawEdoDiagramHelper([0,0,1],[0,1,1],[1,1,1]);
+}
+
+function DrawChord(a){	
+	ctx.font = (30*HE(a)+10) + "px Arial";
+	ctx.fillStyle = HEToColor(HE(a));
+	ctx.fillText((a[0]+":"+a[1]+":"+a[2]), ChordX(a), ChordY(a));
+}
+
+function DrawEdoChord(a){	
+	ctx.font = "10px Arial";
+	ctx.fillStyle = "#2060ff";
+	ctx.fillText(("{0,"+a[0]+","+a[1]+"} \\ "+a[2]), EdoChordX(a), EdoChordY(a) );
+}
+
+ctx.textAlign = "center";
+Reset();
+</script>
+</body>
+</html>

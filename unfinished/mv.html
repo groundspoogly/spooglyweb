@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Max Variety</title>
+<script type="text/javascript" src="helperFunctions.js"></script> <!-- can't use <script /> for some reason -->
+<script>
+function mv(scale) {
+    // scale is a string with L, m, s, etc
+    const doubleScale = scale + scale;
+    let mv = 1; // variety for unisons and periods
+    for (let i = 1; i < scale.length; i++) { // for every interval size
+        let possibleIntervalTypes = [];
+        for (let j = 0; j < scale.length; j++) { // for every degree of the scale
+            let interval = doubleScale.substring(j, j+i);
+            interval = interval.split('').sort().join(''); // sort letters alphabetically
+            if (!possibleIntervalTypes.includes(interval)) possibleIntervalTypes.push(interval);
+        }
+        if (possibleIntervalTypes.length > mv) mv = possibleIntervalTypes.length;
+    }
+    return mv;
+}
+
+function mvList(scale) {
+    // scale is a string with L, m, s, etc
+    const doubleScale = scale + scale;
+	let list = [1]; // variety for unisons and periods
+    for (let i = 1; i < scale.length; i++) { // for every interval size
+        let possibleIntervalTypes = [];
+        for (let j = 0; j < scale.length; j++) { // for every degree of the scale
+            let interval = doubleScale.substring(j, j+i);
+            interval = interval.split('').sort().join(''); // sort letters alphabetically
+            if (!possibleIntervalTypes.includes(interval)) possibleIntervalTypes.push(interval);
+        }
+		list.push(possibleIntervalTypes.length);
+    }
+    return list;
+}
+
+function mvListAvgArr(scaleArr) {
+	let outArr = [];
+	for (let i = 0; i < scaleArr.length; i++) {
+		let mvListArr = mvList(scaleArr[i]);
+		let total = 0;
+		for (let j = 0; j < mvListArr.length; j++) total += mvListArr[j];
+		outArr.push(total / mvListArr.length);
+	}
+	return outArr;
+}
+
+function mv2dArray(inArr) {
+    let outArr = [];
+    for (let i = 0; i < inArr.length; i++) {
+        let temp = [];
+        for (let j = 0; j < inArr[i].length; j++) {
+            temp.push(inArr[i][j] + ' ' + mv(inArr[i][j]));
+        }
+        outArr.push(temp);
+    }
+    return outArr;
+}
+
+function quickJIScale(L, m, s, scale) {
+	// L, m, and s are ratios [d,n], scale is string
+	let r = [1,1];
+	let str = '';
+	for (let i = 0; i < scale.length; i++) {
+		switch (scale.charAt(i)) {
+			case 'L': r[0] *= L[0]; r[1] *= L[1]; break;
+			case 'm': r[0] *= m[0]; r[1] *= m[1]; break;
+			case 's': r[0] *= s[0]; r[1] *= s[1];
+		}
+		for (let j = 2; j <= 5; j++) { // TODO it is fucking impossible to get stack to work here without an infinite loop, I hate JavaScript, something about this line of the reduction part is broken only here
+			if ((r[0] % j == 0) && (r[1] % j == 0)) {
+				r[0] /= j;
+				r[1] /= j;
+			}
+		}
+		str += r[1] + '/' + r[0] + '\n';
+	}
+	return str;
+}
+
+function isMOS(scale) { // TODO: this is an unoptimized and hardly modified copy of mv() that is designed to be faster, and I could optimize it further by assuming that octave complements have the same variety as the smaller intervals
+    // scale is a string with L, m, s, etc
+    const doubleScale = scale + scale;
+    let mv = 1; // MV for unisons and periods
+    for (let i = 1; i < scale.length; i++) { // for every interval size
+        let possibleIntervalTypes = [];
+        for (let j = 0; j < scale.length; j++) { // for every degree of the scale
+            let interval = doubleScale.substring(j, j+i);
+            interval = interval.split('').sort().join(''); // sort letters alphabetically
+            if (!possibleIntervalTypes.includes(interval)) possibleIntervalTypes.push(interval);
+        }
+        if (possibleIntervalTypes.length > mv) {
+            mv = possibleIntervalTypes.length;
+            if (mv > 2) return false;
+        }
+    }
+    return true;
+}
+
+const permute = (str = '') => {
+   if (!!str.length && str.length < 2) return str;
+   const arr = [];
+   for (let i = 0; i < str.length; i++) { // for every character in the string
+        let char = str[i];
+        if (str.indexOf(char) != i) continue; // if the same character exists in a prior position, skip to the next iteration of the loop
+        let remainder = str.slice(0, i) + str.slice(i + 1, str.length); // the remainder is the input string with the specified character removed
+        for (let permutation of permute(remainder)) { // recursive loop, run this function again on the remainder
+            arr.push(char + permutation);
+        }
+   }
+   return arr;
+}
+
+function smallestMVPermutation(scale) {
+    let permutations = permute(scale);
+    let smallestMV = mv(scale);
+    let smallestMVArr = [];
+    for (let i = 0; i < permutations.length; i++) { // for every unique permutation
+        let currentMV = mv(permutations[i]);
+        if (currentMV < smallestMV) {
+            smallestMV = currentMV;
+            smallestMVArr = new Array(permutations[i]);
+        }
+        else if (currentMV == smallestMV) smallestMVArr.push(permutations[i]); // I used = instead of == and it ruined my life
+    }
+    console.log(smallestMV);
+    console.log(smallestMVArr);
+}
+
+function lms(scale) {
+    console.log('Generating permutations...');
+    let permutations = permute(scale);
+	console.log('Permutations: ' + permutations.length);
+    console.log('Checking LMS conditions...'); // TODO output number tested every thousand maybe?
+    let satisfiesAB = [];
+    let satisfiesAC = [];
+    let satisfiesBC = [];
+    let satisfiesABC = [];
+    for (let p of permutations) { // for every unique permutation
+        let a = isMOS(p.replace(/m/g, 'L')); // TODO: an option for optimizing this, the slowest part of the calculation, is to optimize the mv() function
+        let b = isMOS(p.replace(/m/g, 's'));
+        let c = isMOS(p.replace(/s/g, ''));
+        if (a && b && !c) satisfiesAB.push(p);
+        if (a && !b && c) satisfiesAC.push(p);
+        if (!a && b && c) satisfiesBC.push(p);
+        if (a && b && c) satisfiesABC.push(p);
+    }
+    console.log('Removing rotations...'); // as the input scale gets more steps, it's actually faster to remove rotations from the output than from the permutations because of the combinatorial explosion of this rather inelegant method of removing rotations in an already sorted array
+    console.log('MOS if m = L and if m = s:');
+    console.log(removeRotations(satisfiesAB));
+    console.log('MOS if m = L and if s = 0:');
+    console.log(removeRotations(satisfiesAC));
+    console.log('MOS if m = s and if s = 0:');
+    console.log(removeRotations(satisfiesBC));
+    console.log('MOS if m = L, if m = s, and if s = 0:');
+    console.log(removeRotations(satisfiesABC));
+}
+
+function removeRotations(arr) {
+    let arrSansRotations = [];
+    mainLoop: for (let a of arr) {
+        for (let asr of arrSansRotations) { // check against this array before adding to it
+            if (checkRotationStrings(a, asr)) continue mainLoop;
+        }
+        arrSansRotations.push(a);
+    }
+    return arrSansRotations;
+}
+
+function checkRotationStrings(str, rotated) {
+    return str.length === rotated.length && rotated.repeat(2).includes(str);
+}
+</script>
+</head>
+<body>
+<pre>m = L is MOS
+m = s is MOS
+s = 0 is MOS</pre>
+
+<!--
+PUT THE RESULTS OF THIS CODE ON THE WIKI!
+
+Definitive three-prime edos
+Lowest edo(s) above 9 that have an obviously better step error than any around them
+2.3.5: 53edo
+2.3.7: none clear
+2.3.11: 24edo
+2.3.13: none clear
+2.5.7: 31edo
+2.5.11: 37edo
+2.5.13: none clear
+2.7.11: 26edo
+2.7.13: none clear
+2.11.13: 37 or 50edo
+
+2.5.7.11.13: 37edo
+
+mos-moss merger
+
+sLmLsLmLsL is the most even representation of 5L2m3s, but is MV4.
+
+sLmLsLmLsL
+sLLLsLLLsL
+sLsLsLsLsL
+LsLLsLL
+
+more than half got 90's but nobody got 100 and I only got a solid 80
+he curves them???
+
+all problems are given up front so just memorize it
+30 problems total
+just do the hw and especially the review
+
+
+When he says "redraw the circuit" ACTUALLY REDRAW IT
+
+When doing partial fraction expansion, don't do the D firtst. Do the Cs term first. The second term absorbs the constant.
+Laplace inverse in the pictures I took
+School could be so easy if I followed along
+Use the parallel version in nodal analysis because the series version has more than one node
+There's really no alternative to practice with these things
+You can only use s-domain after a source transformation because capacitance becomes reactance?
+What is convolution? It was mentioned in the slides but I think that understanding it can be very useful.
+The review stuff will be posted so I have to check that
+HW7, 8, and 9 were the relevant ones but he'll skipp the portion on complex powers
+STUDY OVER THE WEEKEND AND PAY FULL ATTENTION ON MONDAY
+
+I had my second meeting with DRS. The first was not very helpful, and the second is clarifying that?
+
+lms('LLLLLmmsssssssssssssssss')
+mv.html:69 Generating permutations...
+mv.html:71 Checking LMS conditions...
+mv.html:85 Removing rotations...
+mv.html:86 MOS if m = L and if m = s:
+mv.html:87 []
+mv.html:88 MOS if m = L and if s = 0:
+mv.html:89 (7) ["LssLssLsssmssLsssLssmsss", "LssLssmsssLssLsssLssmsss", "LssLssmsssLssLsssmssLsss", "LssLsssLssmssLsssLssmsss", "LssLsssLssmsssLssLsssmss", "LssLsssmssLssLsssmssLsss", "LssLsssmssLsssLssmssLsss"]
+mv.html:90 MOS if m = s and if s = 0:
+mv.html:91 (72) ["LmssLssssLmsssLssssLssss", "LmssLssssLsmssLssssLssss", "LmssLssssLssmsLssssLssss", "LmssLssssLsssmLssssLssss", "LmssLssssLssssLmsssLssss", "LmssLssssLssssLsmssLssss", "LmssLssssLssssLssmsLssss", "LmssLssssLssssLsssmLssss", "LmsssLsssLmsssLssssLssss", "LmsssLsssLsmssLssssLssss", "LmsssLsssLssmsLssssLssss", "LmsssLsssLsssmLssssLssss", "LmsssLsssLssssLmsssLssss", "LmsssLsssLssssLsmssLssss", "LmsssLsssLssssLssmsLssss", "LmsssLsssLssssLsssmLssss", "LmsssLssssLmsssLssssLsss", "LmsssLssssLsmsLssssLssss", "LmsssLssssLsmssLsssLssss", "LmsssLssssLsmssLssssLsss", "LmsssLssssLssmLssssLssss", "LmsssLssssLssmsLsssLssss", "LmsssLssssLssmsLssssLsss", "LmsssLssssLsssLsmssLssss", "LmsssLssssLsssLssmsLssss", "LmsssLssssLsssLsssmLssss", "LmsssLssssLsssmLsssLssss", "LmsssLssssLsssmLssssLsss", "LmsssLssssLssssLsmsLssss", "LmsssLssssLssssLsmssLsss", "LmsssLssssLssssLssmLssss", "LmsssLssssLssssLssmsLsss", "LmsssLssssLssssLsssmLsss", "LsmsLssssLsmssLssssLssss", "LsmsLssssLssmsLssssLssss", "LsmsLssssLsssmLssssLssss", "LsmsLssssLssssLsmssLssss", "LsmsLssssLssssLssmsLssss", "LsmsLssssLssssLsssmLssss", "LsmssLsssLsmssLssssLssss", "LsmssLsssLssmsLssssLssss", "LsmssLsssLsssmLssssLssss", "LsmssLsssLssssLsmssLssss", "LsmssLsssLssssLssmsLssss", "LsmssLsssLssssLsssmLssss", "LsmssLssssLsmssLssssLsss", "LsmssLssssLssmLssssLssss", "LsmssLssssLssmsLsssLssss", "LsmssLssssLssmsLssssLsss", "LsmssLssssLsssLssmsLssss", "LsmssLssssLsssLsssmLssss", "LsmssLssssLsssmLsssLssss", "LsmssLssssLsssmLssssLsss", "LsmssLssssLssssLssmLssss", "LsmssLssssLssssLssmsLsss", "LsmssLssssLssssLsssmLsss", "LssmLssssLssmsLssssLssss", "LssmLssssLsssmLssssLssss", "LssmLssssLssssLssmsLssss", "LssmLssssLssssLsssmLssss", "LssmsLsssLssmsLssssLssss", "LssmsLsssLsssmLssssLssss", "LssmsLsssLssssLssmsLssss", "LssmsLsssLssssLsssmLssss", "LssmsLssssLssmsLssssLsss", "LssmsLssssLsssLsssmLssss", "LssmsLssssLsssmLsssLssss", "LssmsLssssLsssmLssssLsss", "LssmsLssssLssssLsssmLsss", "LsssLsssmLssssLsssmLssss", "LsssLsssmLssssLssssLsssm", "LsssLssssLsssmLssssLsssm"]
+mv.html:92 MOS if m = L, if m = s, and if s = 0:
+mv.html:93 []
+
+
+Too many harmonics in a power grid can cause motors and other components to burn out.
+I have to go through all the lecture slides because there's so much beauty in math.
+You can turn an RC low-pass filter to a high-pass by switching the capacitor and the resistor.
+Graphs are very similar no matter what type of transfer function, so we use H for all of them?
+Check how he derives the equations for H(jw)'s magnitude and phase angle.
+You used to need a special spectrum analyze rthat's separate from the oscilloscope, but now they're much cheaper.
+Bluetooth sniffer is a spectrum analyzer?
+Swathmore college bode plots table
+"20 decibels per decade" which is a stretch of 10 on the log scale.
+
+Complex poles are actually okay as long as the real part and thus the exponent of the pole are negative, so the system will tend towards convergance.
+
+MULTISIM THURS NIGHT
+
+[["LLmLmLLs"]
+,["LLLmLLms", "LLLmLLsm", "LLLmLsLm", "LLLmsLLm", "LLLsmLLm"]
+,["LLmLLmLs", "LLmLLsLm"]
+,[]
+,["LLLmsLLms", "LLLsmLLms", "LLLsmLLsm", "LLmLsLLms", "LLsLmLLsm"]
+,["LLmLsLsLm"]
+,["LLmLsLmLs", "LLsLmLsLm"]
+,[]
+,["LLLsmLsLms", "LLmsLLsLms", "LLmsLLsmLs", "LLsLmLsLms", "LLsLmsLLsm", "LLsmLLsmLs", "LLsmLsLmLs"]
+,["LmLsLmLsLs"]
+,[]
+,["LLsLmsLLsms", "LLsLmsLsLms", "LLsLsmLsLms", "LLsmLsLLsms", "LLsmLsLmsLs", "LLsmLsLsLms", "LLsmLsLsmLs"]
+,["LmLsLmLsLss", "LmLsLmLssLs", "LmLsLmsLsLs", "LmLsLsLmLss", "LmLsLsLmsLs", "LmLsLsLsmLs", "LmLsLsmLsLs"]
+,[]
+,["LLsLsmLsLsms", "LLsLsmsLLsms", "LLsmsLLsmsLs", "LLsmsLsLmsLs"]
+,["LmLsLmsLsLss", "LmLsLsmLsLss", "LmLsLssLmLss", "LmLssLmLssLs", "LmLssLsLmsLs", "LmLssLsLsmLs", "LmsLsLsLsmLs"]
+,["LmsLsLmsLsLs", "LmsLsLsmLsLs", "LsLsLsmLsLsm"]
+]
+-->
+
+</body>
+</html>
